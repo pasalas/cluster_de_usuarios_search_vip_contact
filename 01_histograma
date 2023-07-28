@@ -101,17 +101,17 @@ SELECT
   COALESCE(A.is_logged,B.is_logged) AS is_logged
 , COALESCE(A.cus_cust_id,B.cus_cust_id) AS cus_cust_id
 -- # METRICAS
+, COALESCE(search_visit,0) AS search_visit_proxi
 , COALESCE(vip_visit,0) AS vip_visit
-, COALESCE(search_visit,0) AS search_visit
 , COALESCE(contact,0) AS contact
--- extra VIP VISIT
-, first_vip_visit
-, last_vip_visit
-, COALESCE(days_vip_visit,0) AS days_vip_visit
 -- extra SEARCH
 , first_search_visit
 , last_search_visit
 , COALESCE(days_search_visit,0) AS days_search_visit
+-- extra VIP VISIT
+, first_vip_visit
+, last_vip_visit
+, COALESCE(days_vip_visit,0) AS days_vip_visit
 -- extra CONTACT
 , first_contact
 , last_contact
