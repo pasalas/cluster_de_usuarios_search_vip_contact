@@ -1,0 +1,124 @@
+DECLARE fecha_desde DATE DEFAULT '2023-07-24'-60
+;
+DECLARE fecha_hasta DATE DEFAULT '2023-07-24'
+;
+
+WITH vip_visit AS
+(
+  SELECT 
+    (CASE WHEN A.cus_cust_id = 'NOT-LOGGED' THEN 'NOT-LOGGED' ELSE 'LOGGED' END) AS is_logged -- filtro logueado
+  , (CASE WHEN A.cus_cust_id = 'NOT-LOGGED' THEN A.uid ELSE A.cus_cust_id END) AS cus_cust_id -- uid si no es logueado
+  , COUNT(*) AS vip_visit
+  , MIN(ds_date) AS first_vip_visit
+  , MAX(ds_date) AS last_vip_visit
+  , COUNT(DISTINCT ds_date) AS days_vip_visit
+
+
+  FROM `meli-bi-data.SBOX_MKTVIS.BT_MLB_MOTORS_VIP_VISIT` AS A
+
+  LEFT JOIN `meli-bi-data.SBOX_CLASSI_PLANNING.LK_ATRIBUTOS_IMM_IMS` AS B
+    ON A.sit_site_id = B.sit_site_id
+    AND A.ite_item_id = CAST(B.ite_item_id AS STRING)
+  
+  WHERE estado IN ('BR-SP','S&atilde;o Paulo','S?o Paulo','SP','São Paulo') -- anuncios de SP
+  AND Categoria_l2 = 'Carros e Caminhonetes' -- cat autos y camionetas
+  AND ds_date BETWEEN fecha_desde AND fecha_hasta
+  AND A.sit_site_id = 'MLB'
+
+  GROUP BY 1,2
+
+)
+
+, search_visit AS
+(
+  SELECT 
+    (CASE WHEN A.cus_cust_id = 'NOT-LOGGED' THEN 'NOT-LOGGED' ELSE 'LOGGED' END) AS is_logged -- filtro logueado
+  , (CASE WHEN A.cus_cust_id = 'NOT-LOGGED' THEN A.uid ELSE A.cus_cust_id END) AS cus_cust_id -- uid si no es logueado
+  , COUNT(*) AS search_visit
+  , MIN(ds_date) AS first_search_visit
+  , MAX(ds_date) AS last_search_visit
+  , COUNT(DISTINCT ds_date) AS days_search_visit
+
+  FROM `meli-bi-data.SBOX_MKTVIS.BT_MLB_MOTORS_SEARCH` AS A
+
+  WHERE ds_date BETWEEN fecha_desde AND fecha_hasta
+  AND cat_categ_name_l2 = 'Carros e Caminhonetes' -- search de autos y camionetas (no se puede obtener detalle a nivel region)
+  AND A.sit_site_id = 'MLB'
+
+  GROUP BY 1,2
+)
+
+, contactos AS
+
+(
+  SELECT 
+    (CASE WHEN CAST(A.CUS_CUST_ID_BUY AS STRING) IS NULL THEN 'NOT-LOGGED' ELSE 'LOGGED' END) AS is_logged -- filtro logueado
+  , COALESCE(CAST(A.CUS_CUST_ID_BUY AS STRING), SESSION_ID) AS cus_cust_id -- uid si no es logueado
+  , COUNT(*) AS contact
+  , MIN(TIM_DAY) AS first_contact
+  , MAX(TIM_DAY) AS last_contact
+  , COUNT(DISTINCT TIM_DAY) AS days_contact
+
+  FROM `meli-bi-data.WHOWNER.BT_CONTACTS_CLASSIFIEDS` AS A
+
+  LEFT JOIN `meli-bi-data.SBOX_CLASSI_PLANNING.LK_ATRIBUTOS_IMM_IMS` AS B
+    ON A.sit_site_id = B.sit_site_id
+    AND A.ite_item_id = B.ite_item_id
+
+  WHERE TIM_DAY BETWEEN fecha_desde AND fecha_hasta
+  AND Categoria_l2 = 'Carros e Caminhonetes' -- cat autos y camionetas
+  AND CCL_CONTACT_TYPE IN ('question','whatsapp','quotation','call') -- tipos de contactos considerados
+  AND A.sit_site_id = 'MLB'
+
+  GROUP BY 1,2
+)
+
+, unificacion AS
+(
+SELECT
+  COALESCE(A.is_logged,B.is_logged) AS is_logged
+, COALESCE(A.cus_cust_id,B.cus_cust_id) AS cus_cust_id
+-- # METRICAS
+, COALESCE(vip_visit,0) AS vip_visit
+, COALESCE(search_visit,0) AS search_visit
+-- extra VIP VISIT
+, first_vip_visit
+, last_vip_visit
+, COALESCE(days_vip_visit,0) AS days_vip_visit
+-- extra SEARCH
+, first_search_visit
+, last_search_visit
+, COALESCE(days_search_visit,0) AS days_search_visit
+
+
+FROM search_visit AS A
+
+FULL JOIN vip_visit AS B
+ON A.cus_cust_id = B.cus_cust_id
+)
+
+SELECT 
+  COALESCE(A.is_logged,B.is_logged) AS is_logged
+, COALESCE(A.cus_cust_id,B.cus_cust_id) AS cus_cust_id
+-- # METRICAS
+, COALESCE(vip_visit,0) AS vip_visit
+, COALESCE(search_visit,0) AS search_visit
+, COALESCE(contact,0) AS contact
+-- extra VIP VISIT
+, first_vip_visit
+, last_vip_visit
+, COALESCE(days_vip_visit,0) AS days_vip_visit
+-- extra SEARCH
+, first_search_visit
+, last_search_visit
+, COALESCE(days_search_visit,0) AS days_search_visit
+-- extra CONTACT
+, first_contact
+, last_contact
+, COALESCE(days_contact,0) AS days_contact
+
+FROM unificacion AS A
+
+FULL JOIN contactos AS B
+ON A.cus_cust_id = B.cus_cust_id
+;
